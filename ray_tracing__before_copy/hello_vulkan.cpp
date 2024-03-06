@@ -677,4 +677,17 @@ void HelloVulkan::createRtDescriptorSet() {
     VkDescriptorSetAllocateInfo allocateInfo{VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
     allocateInfo.descriptorPool = m_rtDescPool;
     allocateInfo.descriptorSetCount = 1;
+    allocateInfo.pSetLayouts        = &m_rtDescSetLayout;
+    vkAllocateDescriptorSets(m_device, &allocateInfo, &m_rtDescSet);
+
+    VkAccelerationStructureKHR tlas = m_rtBuilder.getAccelerationStructure();
+    VkWriteDescriptorSetAccelerationStructureKHR descASInfo{VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR};
+    descASInfo.accelerationStructureCount = 1;
+    descASInfo.pAccelerationStructures    = &tlas;
+    VkDescriptorImageInfo imageInfo{{}, m_offscreenColor.descriptor.imageView, VK_IMAGE_LAYOUT_GENERAL};
+
+    std::vector<VkWriteDescriptorSet> writes;
+    writes.emplace_back(m_rtDescSetLayoutBind.makeWrite(m_rtDescSet, RtxBindings::eTlas, &descASInfo));
+    writes.emplace_back(m_rtDescSetLayoutBind.makeWrite(m_rtDescSet, RtxBindings::eOutImage, &imageInfo));
+    vkUpdateDescriptorSets(m_device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 }
