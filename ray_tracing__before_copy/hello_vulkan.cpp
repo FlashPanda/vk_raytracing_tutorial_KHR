@@ -207,8 +207,10 @@ void HelloVulkan::loadModel(const std::string& filename, glm::mat4 transform)
   nvvk::CommandPool  cmdBufGet(m_device, m_graphicsQueueIndex);
   VkCommandBuffer    cmdBuf = cmdBufGet.createCommandBuffer();
   VkBufferUsageFlags flag   = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-  model.vertexBuffer        = m_alloc.createBuffer(cmdBuf, loader.m_vertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | flag);
-  model.indexBuffer         = m_alloc.createBuffer(cmdBuf, loader.m_indices, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | flag);
+  VkBufferUsageFlags rayTracingFlags =
+      flag | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+  model.vertexBuffer = m_alloc.createBuffer(cmdBuf, loader.m_vertices, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | rayTracingFlags);
+  model.indexBuffer = m_alloc.createBuffer(cmdBuf, loader.m_indices, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | rayTracingFlags);
   model.matColorBuffer = m_alloc.createBuffer(cmdBuf, loader.m_materials, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | flag);
   model.matIndexBuffer = m_alloc.createBuffer(cmdBuf, loader.m_matIndx, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | flag);
   // Creates all textures found and find the offset for this model
@@ -427,6 +429,7 @@ void HelloVulkan::onResize(int /*w*/, int /*h*/)
 {
   createOffscreenRender();
   updatePostDescriptorSet();
+  updateRtDescriptorSet();
 }
 
 
@@ -690,4 +693,18 @@ void HelloVulkan::createRtDescriptorSet() {
     writes.emplace_back(m_rtDescSetLayoutBind.makeWrite(m_rtDescSet, RtxBindings::eTlas, &descASInfo));
     writes.emplace_back(m_rtDescSetLayoutBind.makeWrite(m_rtDescSet, RtxBindings::eOutImage, &imageInfo));
     vkUpdateDescriptorSets(m_device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+}
+
+//---------------------------------------------------------------------------------------------
+// Writes the output image to the descriptor set
+// - Required when changing resolution
+//
+void HelloVulkan::updateRtDescriptorSet() {
+    // £¨1£© Output buffer
+    VkDescriptorImageInfo imageInfo{{},
+        m_offscreenColor.descriptor.imageView,
+        VK_IMAGE_LAYOUT_GENERAL
+    };
+    VkWriteDescriptorSet wds = m_rtDescSetLayoutBind.makeWrite(m_rtDescSet, RtxBindings::eOutImage, &imageInfo);
+    vkUpdateDescriptorSets(m_device, 1, &wds, 0, nullptr);
 }

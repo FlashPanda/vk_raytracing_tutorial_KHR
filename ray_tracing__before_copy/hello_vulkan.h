@@ -133,4 +133,5 @@ public:
   VkDescriptorPool            m_rtDescPool;
   VkDescriptorSetLayout       m_rtDescSetLayout;
   VkDescriptorSet             m_rtDescSet;
+  void                        updateRtDescriptorSet();
 };
