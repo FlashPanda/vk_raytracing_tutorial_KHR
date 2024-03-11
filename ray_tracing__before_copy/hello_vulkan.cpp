@@ -355,6 +355,8 @@ void HelloVulkan::destroyResources()
   vkDestroyPipelineLayout(m_device, m_pipelineLayout, nullptr);
   vkDestroyDescriptorPool(m_device, m_descPool, nullptr);
   vkDestroyDescriptorSetLayout(m_device, m_descSetLayout, nullptr);
+  vkDestroyDescriptorPool(m_device, m_rtDescPool, nullptr);
+  vkDestroyDescriptorSetLayout(m_device, m_rtDescSetLayout, nullptr);
 
   m_alloc.destroy(m_bGlobals);
   m_alloc.destroy(m_bObjDesc);
@@ -707,4 +709,70 @@ void HelloVulkan::updateRtDescriptorSet() {
     };
     VkWriteDescriptorSet wds = m_rtDescSetLayoutBind.makeWrite(m_rtDescSet, RtxBindings::eOutImage, &imageInfo);
     vkUpdateDescriptorSets(m_device, 1, &wds, 0, nullptr);
+}
+
+//----------------------------------------------------------------------------------------------- -- -
+// Pipeline for the ray tracer: all shaders, raygen, chit, miss
+//
+void HelloVulkan::createRtPipeline() {
+    enum StageIndices
+    {
+        eRaygen,
+        eMiss,
+        eClosestHit,
+        eShaderGroupCount
+    };
+
+    // All stages
+    std::array<VkPipelineShaderStageCreateInfo, eShaderGroupCount> stages{};
+    VkPipelineShaderStageCreateInfo stage{VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO};
+    stage.pName = "main";   // All the same entry point
+    //Raygen
+    stage.module = nvvk::createShaderModule(m_device, nvh::loadFile("spv/raytrace.rgen.spv", true, defaultSearchPaths, true));
+    stage.stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+    stages[eRaygen] = stage;
+    // Miss
+    stage.module = nvvk::createShaderModule(m_device, nvh::loadFile("spv/raytrace.rmiss.spv", true, defaultSearchPaths, true));
+    stage.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
+    stages[eMiss] = stage;
+    // Hit group - Closest Hit
+    stage.module = nvvk::createShaderModule(m_device, nvh::loadFile("spv/raytrace.rchit.spv", true, defaultSearchPaths, true));
+    stage.stage = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+    stages[eClosestHit] = stage;
+
+    // Shader groups
+    VkRayTracingShaderGroupCreateInfoKHR group{VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR};
+    group.anyHitShader = VK_SHADER_UNUSED_KHR;
+    group.closestHitShader = VK_SHADER_UNUSED_KHR;
+    group.generalShader    = VK_SHADER_UNUSED_KHR;
+    group.intersectionShader = VK_SHADER_UNUSED_KHR;
+
+    // Raygen
+    group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+    group.generalShader = eRaygen;
+    m_rtShaderGroups.push_back(group);
+
+    // Miss
+    group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+    group.generalShader = eMiss;
+    m_rtShaderGroups.push_back(group);
+
+    // closet hit shader
+    group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+    group.generalShader = VK_SHADER_UNUSED_KHR;
+    group.closestHitShader = eClosestHit;
+    m_rtShaderGroups.push_back(group);
+
+    // We need to setup the pipeline layout that will describe how the pipeline will access external data
+    //VkPipelineLayoutCreateInfo PipelineLayoutCreateInfo;
+    
+    // We first add the push constant range to allow the ray tracing shaders to access the global uniform values.
+
+    // Push constant: we want to be able to update constants used by the shaders
+    VkPushConstantRange pushConstant{VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR,
+                                     0, sizeof(PushConstantRay)};
+
+    VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo{VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO};
+    pipelineLayoutCreateInfo.pushConstantRangeCount = 1;
+    pipelineLayoutCreateInfo.pPushConstantRanges    = &pushConstant;
 }

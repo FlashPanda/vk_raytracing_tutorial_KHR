@@ -134,4 +134,11 @@ public:
   VkDescriptorSetLayout       m_rtDescSetLayout;
   VkDescriptorSet             m_rtDescSet;
   void                        updateRtDescriptorSet();
+  void                        createRtPipeline();
+  std::vector<VkRayTracingShaderGroupCreateInfoKHR> m_rtShaderGroups;
+  VkPipelineLayout                                  m_rtPipelineLayout;
+  VkPipeline                                        m_rtPipeline;
+  // Push constant for ray tracer
+  PushConstantRay m_pcRay{};
+
 };
