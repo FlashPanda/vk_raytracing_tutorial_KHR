@@ -122,23 +122,39 @@ public:
   VkFormat                    m_offscreenDepthFormat{VK_FORMAT_X8_D24_UNORM_PACK32};
 
   // #VKRay
-  void initRayTracing();
-  VkPhysicalDeviceRayTracingPipelinePropertiesKHR m_rtProperties{VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};  // Store the capabilities of the GPU for ray tracing
-  nvvk::RaytracingBuilderKHR m_rtBuilder;
-  auto objectToVkGeometryKHR(const ObjModel& model);
-  void                       createBottomLevelAS();
-  void                       createTopLevelAS();
-  void                       createRtDescriptorSet();
-  nvvk::DescriptorSetBindings m_rtDescSetLayoutBind;
-  VkDescriptorPool            m_rtDescPool;
-  VkDescriptorSetLayout       m_rtDescSetLayout;
-  VkDescriptorSet             m_rtDescSet;
-  void                        updateRtDescriptorSet();
-  void                        createRtPipeline();
+  void                                            initRayTracing();
+  VkPhysicalDeviceRayTracingPipelinePropertiesKHR m_rtProperties{
+      VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR};  // Store the capabilities of the GPU for ray tracing
+  nvvk::RaytracingBuilderKHR                        m_rtBuilder;
+  auto                                              objectToVkGeometryKHR(const ObjModel& model);
+  void                                              createBottomLevelAS();
+  void                                              createTopLevelAS();
+  void                                              createRtDescriptorSet();
+  nvvk::DescriptorSetBindings                       m_rtDescSetLayoutBind;
+  VkDescriptorPool                                  m_rtDescPool;
+  VkDescriptorSetLayout                             m_rtDescSetLayout;
+  VkDescriptorSet                                   m_rtDescSet;
+  void                                              updateRtDescriptorSet();
+  void                                              createRtPipeline();
   std::vector<VkRayTracingShaderGroupCreateInfoKHR> m_rtShaderGroups;
   VkPipelineLayout                                  m_rtPipelineLayout;
   VkPipeline                                        m_rtPipeline;
   // Push constant for ray tracer
   PushConstantRay m_pcRay{};
 
+  // The Shader Binding Table is the "blueprint" of the ray tracing process. This allows us to select which ray generation shader
+  // to use as the entry point, which miss shader to execute if no intersextions are found, and which hit shader groups can be
+  // executed for each instance.
+
+  // The SBT is a collection of up to four arrays containing the handeles of the shader groups used in the ray tracing pipeline,
+  // one array for wach of the ray generation , miss , hit and callable shader groups.
+  // We will create a buffer storing the arrays for the first three groups, here.
+
+  void createRtShaderBindingTable();
+
+  nvvk::Buffer                    m_rtSBTBuffer;
+  VkStridedDeviceAddressRegionKHR m_rgenRegion{};
+  VkStridedDeviceAddressRegionKHR m_missRegion{};
+  VkStridedDeviceAddressRegionKHR m_hitRegion{};
+  VkStridedDeviceAddressRegionKHR m_callRegion{};
 };
