@@ -157,4 +157,6 @@ public:
   VkStridedDeviceAddressRegionKHR m_missRegion{};
   VkStridedDeviceAddressRegionKHR m_hitRegion{};
   VkStridedDeviceAddressRegionKHR m_callRegion{};
+
+  void raytrace(const VkCommandBuffer& cmdBuf, const glm::vec4& clearColor);
 };
