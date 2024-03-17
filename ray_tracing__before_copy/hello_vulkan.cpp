@@ -677,7 +677,8 @@ void HelloVulkan::createTopLevelAS() {
 // This descriptor set holds the Acceleration structure and the output image
 //
 void HelloVulkan::createRtDescriptorSet() {
-    m_rtDescSetLayoutBind.addBinding(RtxBindings::eTlas, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1, VK_SHADER_STAGE_RAYGEN_BIT_KHR); // TLAS
+  m_rtDescSetLayoutBind.addBinding(RtxBindings::eTlas, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 1,
+                                   VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR);  // TLAS
     m_rtDescSetLayoutBind.addBinding(RtxBindings::eOutImage, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_RAYGEN_BIT_KHR); // Output image
 
     m_rtDescPool = m_rtDescSetLayoutBind.createPool(m_device);
@@ -724,6 +725,7 @@ void HelloVulkan::createRtPipeline()
   {
     eRaygen,
     eMiss,
+    eMiss2,
     eClosestHit,
     eShaderGroupCount
   };
@@ -740,6 +742,11 @@ void HelloVulkan::createRtPipeline()
   stage.module = nvvk::createShaderModule(m_device, nvh::loadFile("spv/raytrace.rmiss.spv", true, defaultSearchPaths, true));
   stage.stage   = VK_SHADER_STAGE_MISS_BIT_KHR;
   stages[eMiss] = stage;
+  // The second miss shader is invoked when a shadow ray misses the geometry. It simply indicates that no occlusion has been found
+  stage.module =
+      nvvk::createShaderModule(m_device, nvh::loadFile("spv/raytraceShadow.rmiss.spv", true, defaultSearchPaths, true));
+  stage.stage = VK_SHADER_STAGE_MISS_BIT_KHR;
+  stages[eMiss2] = stage;
   // Hit group - Closest Hit
   stage.module = nvvk::createShaderModule(m_device, nvh::loadFile("spv/raytrace.rchit.spv", true, defaultSearchPaths, true));
   stage.stage         = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
@@ -760,6 +767,11 @@ void HelloVulkan::createRtPipeline()
   // Miss
   group.type          = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
   group.generalShader = eMiss;
+  m_rtShaderGroups.push_back(group);
+
+  // Shadow miss
+  group.type = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+  group.generalShader = eMiss2;
   m_rtShaderGroups.push_back(group);
 
   // closet hit shader
@@ -803,7 +815,15 @@ void HelloVulkan::createRtPipeline()
   rayPipelineInfo.pGroups    = m_rtShaderGroups.data();
 
   // To allow the underlying RTX layer to optimize the pipeline we indicate the maximum recursion depth used by our shaders.
-  rayPipelineInfo.maxPipelineRayRecursionDepth = 1;  // Ray depth
+  // The ray tracing process can shoot rays from the camera, and a shadow ray can be shot from the
+  // hit points of the camera rays, hence a recursion level of 2. This number should be kept as low
+  // as possible for performance reasons. Even recursive ray tracing should be flattened into a loop
+  // in the ray generation to avoid deep recursion.
+  if (m_rtProperties.maxRayRecursionDepth <= 1)
+  {
+      throw std::runtime_error("Device fails to support ray recursion(m_rtProperties.maxRayRecursionDepth <= 1)");
+  }
+  rayPipelineInfo.maxPipelineRayRecursionDepth = 2;  // Ray depth
   rayPipelineInfo.layout                       = m_rtPipelineLayout;
 
   vkCreateRayTracingPipelinesKHR(m_device, {}, {}, 1, &rayPipelineInfo, nullptr, &m_rtPipeline);
@@ -819,7 +839,7 @@ void HelloVulkan::createRtPipeline()
 // - getting all shader handles an write them in a SBT buffer
 // - Besides exception, this could be always done like this
 void HelloVulkan::createRtShaderBindingTable() {
-  uint32_t missCount{1};
+  uint32_t missCount{2};
   uint32_t hitCount{1};
   auto     handleCount = 1 + missCount + hitCount;  // ray gen count is always 1
   uint32_t handleSize  = m_rtProperties.shaderGroupHandleSize;

@@ -9,7 +9,9 @@
 #inlcude "raycommon.glsl"
 #include "wavefront.glsl"
 
+layout(set = 0, binding = eTlas) uniform accelerationStructureEXT topLevelAS;
 layout(location = 0) rayPayloadInEXT hitPayload prd;
+layout(location = 1) rayPayloadInEXT bool isShadowed;
 
 layout(buffer_reference, scalar) buffer Vertices {Vertex v[];};
 layout(buffer_reference, scalar) buffer Indices{ivec3 i[];};
@@ -79,8 +81,40 @@ void main()
 		diffuse *= texture(textureSamplers[nonuniformEXT(txtId)], texCoord).xyz;
 	}
 
-	// Specular 
-	vec3 specular = computeSpecular(mat, gl_WorldRayDirectionEXT, L, normal);
+	vec3 specular = vec3(0);
+	float attenuation = 1;
+	// Tracing shadwo ray only if the light is visible from the surface
+	if (dot (normal, L) > 0)
+	{
+		float tMin = 0.001;
+		float tMax = lightDistance;
+		vec3 origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
+		vec3 rayDir = L;
+		uint flags = gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
+		isShadowed = true;
 
-	prd.hitValue = vec3(lightIntensity * (diffuse + specular));
+		traceRayEXT(topLevelAS, // acceleration structure
+			flags, // rayFlags
+			0xFF, // cullMask
+			0, // sbtRecordOffset
+			0, // sbtRecordStride
+			1, // missIndex
+			origin, // ray origin
+			tMin, // ray min range
+			rayDir, // ray direction
+			tMax, // ray max range
+			1 // payload (location = 1)
+			);
+
+		if (isShadowed)
+		{
+		attenuation = 0.3;
+		}
+		else 
+		{
+			specular = computeSpecular(mat, gl_WorldRayDirectionEXT, L, normal);
+		}
+	}
+
+	prd.hitValue = vec3(lightIntensity * attenuation*  (diffuse + specular));
 }
